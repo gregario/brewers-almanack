@@ -1,0 +1,48 @@
+{
+  "name": "brewers-almanack",
+  "version": "0.1.0",
+  "description": "A brewing knowledge MCP server — beer styles, ingredients, off-flavour diagnosis, water chemistry, and recipe guidance for AI brewing assistants",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "brewers-almanack": "dist/index.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "dev": "tsx src/index.ts",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp", "brewing", "beer", "homebrew", "bjcp", "recipe",
+    "model-context-protocol", "hops", "malt", "yeast"
+  ],
+  "mcpName": "io.github.gregario/brewers-almanack",
+  "author": "gregario",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gregario/brewers-almanack"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12",
+    "zod": "^3.25"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
