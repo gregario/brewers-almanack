@@ -19,6 +19,8 @@ Ask your AI assistant about beer styles, diagnose off-flavours, build recipes, m
 
 **6 tools. Zero config. Works with every MCP-compatible IDE.**
 
+[![Brewers almanack MCP server](https://glama.ai/mcp/servers/gregario/brewers-almanack/badges/card.svg)](https://glama.ai/mcp/servers/gregario/brewers-almanack)
+
 ## Install
 
 ```bash
