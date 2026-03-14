@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.gregario/brewers-almanack -->
 <p align="center">
   <h1 align="center">Brewers Almanack</h1>
   <p align="center">A brewing knowledge MCP server — beer styles, ingredients, off-flavour diagnosis, water chemistry, and recipe guidance for AI assistants.</p>
