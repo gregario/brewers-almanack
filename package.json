@@ -25,15 +25,23 @@
     "node": ">=18.0.0"
   },
   "keywords": [
-    "mcp", "brewing", "beer", "homebrew", "bjcp", "recipe",
-    "model-context-protocol", "hops", "malt", "yeast"
+    "mcp",
+    "brewing",
+    "beer",
+    "homebrew",
+    "bjcp",
+    "recipe",
+    "model-context-protocol",
+    "hops",
+    "malt",
+    "yeast"
   ],
   "mcpName": "io.github.gregario/brewers-almanack",
   "author": "gregario",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gregario/brewers-almanack"
+    "url": "git+https://github.com/gregario/brewers-almanack.git"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12",
