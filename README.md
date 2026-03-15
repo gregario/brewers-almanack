@@ -1,7 +1,7 @@
 <!-- mcp-name: io.github.gregario/brewers-almanack -->
 <p align="center">
   <h1 align="center">Brewers Almanack</h1>
-  <p align="center">A brewing knowledge MCP server — beer styles, ingredients, off-flavour diagnosis, water chemistry, and recipe guidance for AI assistants.</p>
+  <p align="center">A brewing knowledge MCP server: beer styles, ingredients, off-flavour diagnosis, water chemistry, and recipe guidance for AI assistants.</p>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 
 ---
 
-Ask your AI assistant about beer styles, diagnose off-flavours, build recipes, match water profiles, and pair food — all backed by real brewing data, not hallucinations.
+Ask your AI assistant about beer styles, diagnose off-flavours, build recipes, match water profiles, and pair food (all backed by real brewing data, not hallucinations).
 
 **6 tools. Zero config. Works with every MCP-compatible IDE.**
 
@@ -134,16 +134,16 @@ Add to `settings.json`:
 ## Example Conversations
 
 **"What hops work in a Belgian Dubbel?"**
-> Searches ingredients for hops that complement Belgian styles — returns varieties like Styrian Goldings and Saaz with alpha acid ranges, aromas, and substitutes.
+> Searches ingredients for hops that complement Belgian styles, returning varieties like Styrian Goldings and Saaz with alpha acid ranges, aromas, and substitutes.
 
-**"My beer tastes like butter — what went wrong?"**
+**"My beer tastes like butter, what went wrong?"**
 > Diagnoses diacetyl: identifies the compound, explains causes (incomplete fermentation, premature racking), and gives prevention steps (diacetyl rest, healthy yeast pitch).
 
 **"Suggest a recipe for a West Coast IPA"**
 > Builds a complete recipe: pale malt base with crystal malt, Centennial/Cascade hop schedule with dry hop additions, American ale yeast, and a Burton-style water profile.
 
 **"What food pairs well with a stout?"**
-> Returns pairing suggestions — oysters, chocolate desserts, grilled meats — with principles explaining why each pairing works (complement, contrast, or cleanse).
+> Returns pairing suggestions (oysters, chocolate desserts, grilled meats) with principles explaining why each pairing works (complement, contrast, or cleanse).
 
 ## Data Sources
 
@@ -164,7 +164,7 @@ See [ROADMAP.md](ROADMAP.md) for planned features: brewing calculators, recipe i
 
 ## Contributing
 
-Contributions are welcome — especially data contributions. More hop varieties, yeast strains, regional water profiles, and food pairings make the server more useful for everyone.
+Contributions are welcome, especially data contributions. More hop varieties, yeast strains, regional water profiles, and food pairings make the server more useful for everyone.
 
 ```bash
 git clone https://github.com/gregario/brewers-almanack.git
