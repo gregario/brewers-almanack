@@ -1,6 +1,6 @@
 {
   "name": "brewers-almanack",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A brewing knowledge MCP server — beer styles, ingredients, off-flavour diagnosis, water chemistry, and recipe guidance for AI brewing assistants",
   "type": "module",
   "main": "dist/index.js",
