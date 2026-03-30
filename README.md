@@ -186,3 +186,8 @@ See [ROADMAP.md](ROADMAP.md) for areas where contributions are most needed.
 ## Licence
 
 [MIT](LICENSE)
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/gregario-brewers-almanack).
+
