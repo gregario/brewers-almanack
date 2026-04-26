@@ -85,15 +85,30 @@ function selectWater(styleName: string) {
   return matching.length > 0 ? matching[0] : null;
 }
 
-function calculateGrainWeight(ogTarget: number, batchLitres: number, efficiency: number = 0.72): number {
-  // Simplified grain weight calculation
-  // OG points = (OG - 1) * 1000, e.g. 1.065 -> 65
+// Unit conversions for grain weight calculation.
+// Malt potential is conventionally expressed in PPG (points per pound per
+// gallon at 100% mash efficiency). To work consistently in metric we convert
+// the imperial PPG yield into a metric "points per kg per litre" yield.
+const LITRES_PER_US_GALLON = 3.785411784;
+const KG_PER_POUND = 0.45359237;
+// 37 PPG (typical 2-Row pale malt) → ~308.8 points per kg per litre.
+const POINTS_PER_KG_PER_LITRE_AT_37_PPG =
+  (37 * LITRES_PER_US_GALLON) / KG_PER_POUND;
+
+function calculateGrainWeight(
+  ogTarget: number,
+  batchLitres: number,
+  efficiency: number = 0.72,
+): number {
+  // OG points: (OG - 1) * 1000. e.g. 1.065 → 65 gravity points per litre.
   const ogPoints = (ogTarget - 1) * 1000;
-  // Points needed for batch
+  // Total gravity-points needed across the whole batch (litre-points).
   const totalPoints = ogPoints * batchLitres;
-  // Base malt potential ~37 points per kg per litre at 100% efficiency
-  const pointsPerKg = 37 * efficiency;
-  return totalPoints / pointsPerKg;
+  // Effective yield per kg of grain across the whole batch volume,
+  // assuming a 37 PPG base malt at the given mash efficiency.
+  // Result is in litre-points per kg of grain.
+  const yieldPerKg = POINTS_PER_KG_PER_LITRE_AT_37_PPG * efficiency;
+  return totalPoints / yieldPerKg;
 }
 
 export function registerSuggestRecipe(server: McpServer): void {
@@ -137,9 +152,9 @@ export function registerSuggestRecipe(server: McpServer): void {
       const water = selectWater(matchedStyle.name);
 
       const totalGrainKg = calculateGrainWeight(ogTarget, batch_size_litres);
-      const baseKg = (totalGrainKg * 0.85).toFixed(1);
+      const baseKg = (totalGrainKg * 0.85).toFixed(2);
       const specialtyKg = malts.specialty.length > 0
-        ? (totalGrainKg * 0.15 / malts.specialty.length).toFixed(1)
+        ? (totalGrainKg * 0.15 / malts.specialty.length).toFixed(2)
         : "0";
 
       // Determine mash temp based on style character

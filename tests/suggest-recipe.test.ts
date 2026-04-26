@@ -72,4 +72,66 @@ describe("suggest_recipe tool", () => {
     expect(text20).toContain("20");
     expect(text40).toContain("40");
   });
+
+  // Regression test for grain bill unit bug: previously the calculation
+  // mismatched imperial PPG and metric (kg/L), producing grain weights
+  // ~8.3x too high (e.g. 40 kg of base malt for a 20L IPA, which would
+  // give an impossible OG). For a normal-strength all-grain beer the
+  // total grain bill should land around 0.15–0.30 kg per litre.
+  describe("grain bill weight is realistic (regression)", () => {
+    const cases: Array<{ style: string; batchLitres: number }> = [
+      { style: "American IPA", batchLitres: 20 },
+      { style: "American IPA", batchLitres: 40 },
+      { style: "American Pale Ale", batchLitres: 20 },
+      { style: "American Stout", batchLitres: 20 },
+      { style: "Weissbier", batchLitres: 20 },
+      { style: "German Pils", batchLitres: 20 },
+    ];
+
+    function parseGrainBillKg(text: string): number {
+      // Parse the markdown grain bill section and sum the kg numbers.
+      const lines = text.split("\n");
+      const grainStart = lines.findIndex((l) => l.startsWith("## Grain Bill"));
+      expect(grainStart).toBeGreaterThanOrEqual(0);
+      let total = 0;
+      for (let i = grainStart + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.startsWith("##")) break;
+        const match = line.match(/:\s*([\d.]+)\s*kg/);
+        if (match) total += parseFloat(match[1]);
+      }
+      return total;
+    }
+
+    it.each(cases)(
+      "$style at $batchLitres L produces a sensible grain bill",
+      async ({ style, batchLitres }) => {
+        const result = await client.callTool({
+          name: "suggest_recipe",
+          arguments: { style, batch_size_litres: batchLitres },
+        });
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const totalKg = parseGrainBillKg(text);
+        const kgPerLitre = totalKg / batchLitres;
+
+        // Sanity floor: too small means a unit went the other way (g vs kg).
+        // Sanity ceiling: 0.30 kg/L covers strong styles up to ~OG 1.085-ish.
+        // Anything above that suggests a unit/efficiency bug returning.
+        expect(kgPerLitre).toBeGreaterThan(0.1);
+        expect(kgPerLitre).toBeLessThan(0.35);
+      },
+    );
+
+    it("American IPA at 20L stays well under the broken value (~40 kg)", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American IPA", batch_size_litres: 20 },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const totalKg = parseGrainBillKg(text);
+      // Pre-fix: total would be ~47 kg. Post-fix it should be ~5–6 kg.
+      expect(totalKg).toBeLessThan(10);
+      expect(totalKg).toBeGreaterThan(3);
+    });
+  });
 });
