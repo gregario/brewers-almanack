@@ -194,4 +194,102 @@ describe("suggest_recipe tool", () => {
       expect(cMax).toBeLessThanOrEqual(20);
     });
   });
+
+  // Regression test for malt-selection bug: previously the fallback case
+  // returned `m.type === "crystal"` for any non-stout/amber/wheat style,
+  // causing American IPA to ship two crystal malts in its grain bill —
+  // not idiomatic for the style.
+  describe("malt selection for pale styles (regression)", () => {
+    function extractGrainBillSection(text: string): string {
+      const lines = text.split("\n");
+      const start = lines.findIndex((l) => l.startsWith("## Grain Bill"));
+      const end = lines.findIndex((l, i) => i > start && l.startsWith("##"));
+      return lines.slice(start, end === -1 ? undefined : end).join("\n");
+    }
+
+    it("American IPA grain bill does not include crystal malt", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American IPA" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      // Pre-fix: grain bill listed e.g. "Crystal 10L: ... (crystal)" twice.
+      expect(grainBill).not.toMatch(/\(crystal\)/i);
+      expect(grainBill.toLowerCase()).not.toContain("crystal ");
+    });
+
+    it("American IPA grain bill is base-malt only", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American IPA" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      // Should contain exactly one grain line tagged "(base)".
+      const grainLines = grainBill.split("\n").filter((l) => l.startsWith("- "));
+      expect(grainLines).toHaveLength(1);
+      expect(grainLines[0]).toMatch(/\(base\)/);
+    });
+
+    it("German Pils uses Pilsner Malt with no crystal additions", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "German Pils" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      expect(grainBill).toContain("Pilsner Malt");
+      expect(grainBill).not.toMatch(/\(crystal\)/i);
+    });
+
+    it("American Stout still gets roasted malts (regression check that fix didn't regress dark styles)", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American Stout" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      expect(grainBill).toMatch(/\(roasted\)/i);
+    });
+
+    it("Vienna Lager (amber style) still gets crystal/caramel malts", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "Vienna Lager" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      // Amber styles legitimately get crystal/caramel grains.
+      expect(grainBill).toMatch(/\(crystal\)/i);
+    });
+
+    it('does not match "amber" against "lagered" tag (substring false-positive guard)', async () => {
+      // Pre-fix, the heuristic checked lower.includes("red"), which silently
+      // matched "lagered" inside lager tags — pulling pale lagers into the
+      // amber branch. German Pils explicitly has tag "lagered" but is pale.
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "German Pils" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      const grainLines = grainBill.split("\n").filter((l) => l.startsWith("- "));
+      // A pale lager should not get crystal/caramel additions from the
+      // amber branch.
+      expect(grainLines).toHaveLength(1);
+    });
+
+    it("American Pale Ale grain bill is base-malt only (regression on the IPA branch)", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American Pale Ale" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      const grainLines = grainBill.split("\n").filter((l) => l.startsWith("- "));
+      expect(grainLines).toHaveLength(1);
+      expect(grainLines[0]).toMatch(/\(base\)/);
+    });
+  });
 });
