@@ -13,31 +13,112 @@ function findStyle(query: string) {
 }
 
 function selectMalts(styleName: string, category: string, tags: string[]) {
-  // Pick a base malt
+  // Pick a base malt. For Pilsner/lager-pale styles prefer Pilsner Malt;
+  // for English styles prefer Maris Otter; otherwise default to 2-Row.
+  // Uses a mix of tag checks (preferred — explicit) and case-insensitive
+  // word matches against name+category. Avoid bare substring checks like
+  // .includes("red") because they false-match "lagered" etc.
   const baseMalts = MALTS.filter((m) => m.type === "base");
-  const base = baseMalts[0]; // Default to first base malt (typically Pale Malt)
+  const tagsLower = tags.map((t) => t.toLowerCase());
+  const nameCat = (styleName + " " + category).toLowerCase();
+  const hasWord = (s: string, word: string) =>
+    new RegExp(`\\b${word}\\b`, "i").test(s);
 
-  // Pick specialty malts based on style character
+  const isPilsnerLike =
+    tagsLower.includes("pilsner-family") ||
+    tagsLower.includes("pale-lager-family") ||
+    hasWord(nameCat, "pilsner") ||
+    hasWord(nameCat, "pils") ||
+    hasWord(nameCat, "helles") ||
+    /k(ö|o)lsch/i.test(nameCat);
+  const isEnglish =
+    hasWord(nameCat, "english") ||
+    hasWord(nameCat, "british") ||
+    hasWord(nameCat, "esb") ||
+    /\bmild\b/i.test(styleName);
+  const isWheat =
+    tagsLower.includes("wheat-beer-family") ||
+    hasWord(nameCat, "wheat") ||
+    hasWord(nameCat, "hefeweizen") ||
+    hasWord(nameCat, "weiss") ||
+    hasWord(nameCat, "weissbier") ||
+    hasWord(nameCat, "witbier");
+
+  let base = baseMalts.find((m) => m.name === "2-Row Pale Malt") ?? baseMalts[0];
+  if (isPilsnerLike) {
+    base = baseMalts.find((m) => m.name === "Pilsner Malt") ?? base;
+  } else if (isEnglish) {
+    base = baseMalts.find((m) => m.name === "Maris Otter") ?? base;
+  } else if (isWheat) {
+    base = baseMalts.find((m) => m.name === "Wheat Malt") ?? base;
+  }
+
+  // Pick specialty malts based on style character. Use tag/word checks,
+  // not bare substring matches, to avoid picking up "red" inside "lagered".
   const specialtyMalts = MALTS.filter((m) => m.type !== "base");
-  const lower = (category + " " + styleName + " " + tags.join(" ")).toLowerCase();
 
-  const selected = specialtyMalts.filter((m) => {
-    const mLower = (m.name + " " + m.flavour + " " + m.description).toLowerCase();
-    // Match dark styles with roasted/dark malts
-    if (lower.includes("stout") || lower.includes("porter")) {
-      return m.type === "roasted" || mLower.includes("chocolate") || mLower.includes("roast");
-    }
-    if (lower.includes("amber") || lower.includes("red") || lower.includes("brown")) {
+  const isDark =
+    tagsLower.includes("dark-color") ||
+    tagsLower.includes("stout-family") ||
+    tagsLower.includes("dark-lager-family") ||
+    hasWord(nameCat, "stout") ||
+    hasWord(nameCat, "porter") ||
+    hasWord(nameCat, "schwarzbier") ||
+    hasWord(nameCat, "dunkel") ||
+    hasWord(nameCat, "dunkles");
+  if (isDark) {
+    // Prefer actual roasted-type malts; fall back to crystals with roast
+    // character only if no roasted malts qualify.
+    const roasted = specialtyMalts.filter((m) => m.type === "roasted").slice(0, 2);
+    return { base, specialty: roasted };
+  }
+
+  const isAmber =
+    tagsLower.includes("amber-color") ||
+    tagsLower.includes("amber-ale-family") ||
+    tagsLower.includes("amber-lager-family") ||
+    hasWord(nameCat, "amber") ||
+    hasWord(nameCat, "red") ||
+    hasWord(nameCat, "brown") ||
+    hasWord(nameCat, "märzen") ||
+    hasWord(nameCat, "marzen") ||
+    hasWord(nameCat, "vienna") ||
+    hasWord(nameCat, "altbier");
+  if (isAmber) {
+    const selected = specialtyMalts.filter((m) => {
+      const mLower = (m.name + " " + m.flavour + " " + m.description).toLowerCase();
       return m.type === "crystal" || mLower.includes("caramel");
-    }
-    if (lower.includes("wheat")) {
-      return mLower.includes("wheat");
-    }
-    // Default: pick a crystal malt for body
-    return m.type === "crystal";
-  }).slice(0, 2);
+    }).slice(0, 2);
+    return { base, specialty: selected };
+  }
 
-  return { base, specialty: selected.length > 0 ? selected : specialtyMalts.slice(0, 1) };
+  if (isWheat) {
+    // Wheat styles already have a wheat-malt base; add at most one specialty
+    // grain (e.g. flaked wheat or flaked oats) for character.
+    const selected = specialtyMalts.filter((m) => {
+      const mLower = (m.name + " " + m.flavour + " " + m.description).toLowerCase();
+      return mLower.includes("wheat") || mLower.includes("oat");
+    }).slice(0, 1);
+    return { base, specialty: selected };
+  }
+
+  // Pale styles (American IPA, American Pale Ale, Bohemian/German Pils,
+  // Helles, Kölsch, Blonde Ale, Cream Ale, etc.): keep it base-malt-led.
+  // Crystal malts in IPAs/pilsners are not idiomatic — leave specialty empty
+  // and let the consumer scale base to 100%.
+  const isPale =
+    tagsLower.includes("pale-color") ||
+    hasWord(nameCat, "pale") ||
+    hasWord(nameCat, "ipa") ||
+    hasWord(nameCat, "blonde") ||
+    hasWord(nameCat, "cream") ||
+    isPilsnerLike;
+  if (isPale) {
+    return { base, specialty: [] };
+  }
+
+  // Unknown/other styles: default to base-only rather than guessing crystal.
+  return { base, specialty: [] };
 }
 
 function selectHops(styleName: string) {
@@ -85,15 +166,30 @@ function selectWater(styleName: string) {
   return matching.length > 0 ? matching[0] : null;
 }
 
-function calculateGrainWeight(ogTarget: number, batchLitres: number, efficiency: number = 0.72): number {
-  // Simplified grain weight calculation
-  // OG points = (OG - 1) * 1000, e.g. 1.065 -> 65
+// Unit conversions for grain weight calculation.
+// Malt potential is conventionally expressed in PPG (points per pound per
+// gallon at 100% mash efficiency). To work consistently in metric we convert
+// the imperial PPG yield into a metric "points per kg per litre" yield.
+const LITRES_PER_US_GALLON = 3.785411784;
+const KG_PER_POUND = 0.45359237;
+// 37 PPG (typical 2-Row pale malt) → ~308.8 points per kg per litre.
+const POINTS_PER_KG_PER_LITRE_AT_37_PPG =
+  (37 * LITRES_PER_US_GALLON) / KG_PER_POUND;
+
+function calculateGrainWeight(
+  ogTarget: number,
+  batchLitres: number,
+  efficiency: number = 0.72,
+): number {
+  // OG points: (OG - 1) * 1000. e.g. 1.065 → 65 gravity points per litre.
   const ogPoints = (ogTarget - 1) * 1000;
-  // Points needed for batch
+  // Total gravity-points needed across the whole batch (litre-points).
   const totalPoints = ogPoints * batchLitres;
-  // Base malt potential ~37 points per kg per litre at 100% efficiency
-  const pointsPerKg = 37 * efficiency;
-  return totalPoints / pointsPerKg;
+  // Effective yield per kg of grain across the whole batch volume,
+  // assuming a 37 PPG base malt at the given mash efficiency.
+  // Result is in litre-points per kg of grain.
+  const yieldPerKg = POINTS_PER_KG_PER_LITRE_AT_37_PPG * efficiency;
+  return totalPoints / yieldPerKg;
 }
 
 export function registerSuggestRecipe(server: McpServer): void {
@@ -137,9 +233,13 @@ export function registerSuggestRecipe(server: McpServer): void {
       const water = selectWater(matchedStyle.name);
 
       const totalGrainKg = calculateGrainWeight(ogTarget, batch_size_litres);
-      const baseKg = (totalGrainKg * 0.85).toFixed(1);
+      // When specialty malts are present, hold base ≈ 85% and split the
+      // remaining 15% across specialty grains. With no specialty (e.g. pale
+      // styles like American IPA / Pilsner) the base malt provides 100%.
+      const baseFraction = malts.specialty.length > 0 ? 0.85 : 1.0;
+      const baseKg = (totalGrainKg * baseFraction).toFixed(2);
       const specialtyKg = malts.specialty.length > 0
-        ? (totalGrainKg * 0.15 / malts.specialty.length).toFixed(1)
+        ? (totalGrainKg * 0.15 / malts.specialty.length).toFixed(2)
         : "0";
 
       // Determine mash temp based on style character
@@ -147,7 +247,11 @@ export function registerSuggestRecipe(server: McpServer): void {
       const isDry = tags.includes("bitter") || tags.includes("hoppy") || matchedStyle.name.toLowerCase().includes("ipa");
       const mashTemp = isDry ? "65°C (149°F) — lower for drier finish" : "67°C (153°F) — higher for fuller body";
 
-      const fermTemp = `${yeast.tempMin}-${yeast.tempMax}°F (${Math.round((yeast.tempMin - 32) * 5 / 9)}-${Math.round((yeast.tempMax - 32) * 5 / 9)}°C)`;
+      // Yeast tempMin/tempMax are stored in °C (see src/data/yeasts.ts —
+      // ales 18–23, lagers 9–15, kveik 25–40). Convert °C → °F for display.
+      const fermTempFMin = Math.round(yeast.tempMin * 9 / 5 + 32);
+      const fermTempFMax = Math.round(yeast.tempMax * 9 / 5 + 32);
+      const fermTemp = `${yeast.tempMin}-${yeast.tempMax}°C (${fermTempFMin}-${fermTempFMax}°F)`;
 
       const lines: string[] = [
         `# Recipe: ${matchedStyle.name}`,

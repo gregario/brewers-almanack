@@ -33,7 +33,7 @@ function formatYeast(yeast: Yeast): string {
     `## ${yeast.name} (Yeast)`,
     `Producer: ${yeast.producer} | Code: ${yeast.code}`,
     `Type: ${yeast.type} | Form: ${yeast.form}`,
-    `Temp: ${yeast.tempMin}-${yeast.tempMax}°F`,
+    `Temp: ${yeast.tempMin}-${yeast.tempMax}°C`,
     `Attenuation: ${yeast.attenuationMin}-${yeast.attenuationMax}%`,
     `Flocculation: ${yeast.flocculation}`,
     `Flavour: ${yeast.flavourProfile}`,

@@ -72,4 +72,224 @@ describe("suggest_recipe tool", () => {
     expect(text20).toContain("20");
     expect(text40).toContain("40");
   });
+
+  // Regression test for grain bill unit bug: previously the calculation
+  // mismatched imperial PPG and metric (kg/L), producing grain weights
+  // ~8.3x too high (e.g. 40 kg of base malt for a 20L IPA, which would
+  // give an impossible OG). For a normal-strength all-grain beer the
+  // total grain bill should land around 0.15–0.30 kg per litre.
+  describe("grain bill weight is realistic (regression)", () => {
+    const cases: Array<{ style: string; batchLitres: number }> = [
+      { style: "American IPA", batchLitres: 20 },
+      { style: "American IPA", batchLitres: 40 },
+      { style: "American Pale Ale", batchLitres: 20 },
+      { style: "American Stout", batchLitres: 20 },
+      { style: "Weissbier", batchLitres: 20 },
+      { style: "German Pils", batchLitres: 20 },
+    ];
+
+    function parseGrainBillKg(text: string): number {
+      // Parse the markdown grain bill section and sum the kg numbers.
+      const lines = text.split("\n");
+      const grainStart = lines.findIndex((l) => l.startsWith("## Grain Bill"));
+      expect(grainStart).toBeGreaterThanOrEqual(0);
+      let total = 0;
+      for (let i = grainStart + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.startsWith("##")) break;
+        const match = line.match(/:\s*([\d.]+)\s*kg/);
+        if (match) total += parseFloat(match[1]);
+      }
+      return total;
+    }
+
+    it.each(cases)(
+      "$style at $batchLitres L produces a sensible grain bill",
+      async ({ style, batchLitres }) => {
+        const result = await client.callTool({
+          name: "suggest_recipe",
+          arguments: { style, batch_size_litres: batchLitres },
+        });
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const totalKg = parseGrainBillKg(text);
+        const kgPerLitre = totalKg / batchLitres;
+
+        // Sanity floor: too small means a unit went the other way (g vs kg).
+        // Sanity ceiling: 0.30 kg/L covers strong styles up to ~OG 1.085-ish.
+        // Anything above that suggests a unit/efficiency bug returning.
+        expect(kgPerLitre).toBeGreaterThan(0.1);
+        expect(kgPerLitre).toBeLessThan(0.35);
+      },
+    );
+
+    it("American IPA at 20L stays well under the broken value (~40 kg)", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American IPA", batch_size_litres: 20 },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const totalKg = parseGrainBillKg(text);
+      // Pre-fix: total would be ~47 kg. Post-fix it should be ~5–6 kg.
+      expect(totalKg).toBeLessThan(10);
+      expect(totalKg).toBeGreaterThan(3);
+    });
+  });
+
+  // Regression test for fermentation temperature display bug: previously the
+  // tool labelled the Celsius source data as °F and applied an (F-32)*5/9
+  // conversion, producing nonsense like "18-23°F (-8--5°C)" for US-05.
+  describe("fermentation temperature display (regression)", () => {
+    function extractFermLine(text: string): string {
+      const lines = text.split("\n");
+      const line = lines.find((l) => l.includes("Fermentation:"));
+      expect(line).toBeDefined();
+      return line as string;
+    }
+
+    it("American IPA shows sensible Celsius ferm temp for US-05 (~18-22°C)", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American IPA" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const fermLine = extractFermLine(text);
+      // Must report Celsius range that is plausible for ale fermentation.
+      const cMatch = fermLine.match(/(\d+)-(\d+)°C/);
+      expect(cMatch).not.toBeNull();
+      const cMin = Number(cMatch![1]);
+      const cMax = Number(cMatch![2]);
+      // Ale yeasts ferment roughly 15-25°C. Anything below 5°C is the bug.
+      expect(cMin).toBeGreaterThanOrEqual(10);
+      expect(cMax).toBeLessThanOrEqual(30);
+      expect(cMin).toBeLessThan(cMax);
+    });
+
+    it("does not contain the broken negative-Celsius output", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American IPA" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      // Pre-fix output looked like "18-23°F (-8--5°C)" — a leading minus sign
+      // immediately after "(" before a digit was the smoking gun.
+      expect(text).not.toMatch(/\(-\d/);
+      // Two consecutive minus signs in the temperature line are also impossible
+      // for a sensible Celsius range like "-8--5".
+      expect(text).not.toMatch(/--/);
+    });
+
+    it("German Pils shows lager-range ferm temp (~9-13°C)", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "German Pils" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const fermLine = extractFermLine(text);
+      const cMatch = fermLine.match(/(\d+)-(\d+)°C/);
+      expect(cMatch).not.toBeNull();
+      const cMin = Number(cMatch![1]);
+      const cMax = Number(cMatch![2]);
+      // Lager yeasts ferment roughly 8-15°C.
+      expect(cMin).toBeGreaterThanOrEqual(5);
+      expect(cMax).toBeLessThanOrEqual(20);
+    });
+  });
+
+  // Regression test for malt-selection bug: previously the fallback case
+  // returned `m.type === "crystal"` for any non-stout/amber/wheat style,
+  // causing American IPA to ship two crystal malts in its grain bill —
+  // not idiomatic for the style.
+  describe("malt selection for pale styles (regression)", () => {
+    function extractGrainBillSection(text: string): string {
+      const lines = text.split("\n");
+      const start = lines.findIndex((l) => l.startsWith("## Grain Bill"));
+      const end = lines.findIndex((l, i) => i > start && l.startsWith("##"));
+      return lines.slice(start, end === -1 ? undefined : end).join("\n");
+    }
+
+    it("American IPA grain bill does not include crystal malt", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American IPA" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      // Pre-fix: grain bill listed e.g. "Crystal 10L: ... (crystal)" twice.
+      expect(grainBill).not.toMatch(/\(crystal\)/i);
+      expect(grainBill.toLowerCase()).not.toContain("crystal ");
+    });
+
+    it("American IPA grain bill is base-malt only", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American IPA" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      // Should contain exactly one grain line tagged "(base)".
+      const grainLines = grainBill.split("\n").filter((l) => l.startsWith("- "));
+      expect(grainLines).toHaveLength(1);
+      expect(grainLines[0]).toMatch(/\(base\)/);
+    });
+
+    it("German Pils uses Pilsner Malt with no crystal additions", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "German Pils" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      expect(grainBill).toContain("Pilsner Malt");
+      expect(grainBill).not.toMatch(/\(crystal\)/i);
+    });
+
+    it("American Stout still gets roasted malts (regression check that fix didn't regress dark styles)", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American Stout" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      expect(grainBill).toMatch(/\(roasted\)/i);
+    });
+
+    it("Vienna Lager (amber style) still gets crystal/caramel malts", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "Vienna Lager" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      // Amber styles legitimately get crystal/caramel grains.
+      expect(grainBill).toMatch(/\(crystal\)/i);
+    });
+
+    it('does not match "amber" against "lagered" tag (substring false-positive guard)', async () => {
+      // Pre-fix, the heuristic checked lower.includes("red"), which silently
+      // matched "lagered" inside lager tags — pulling pale lagers into the
+      // amber branch. German Pils explicitly has tag "lagered" but is pale.
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "German Pils" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      const grainLines = grainBill.split("\n").filter((l) => l.startsWith("- "));
+      // A pale lager should not get crystal/caramel additions from the
+      // amber branch.
+      expect(grainLines).toHaveLength(1);
+    });
+
+    it("American Pale Ale grain bill is base-malt only (regression on the IPA branch)", async () => {
+      const result = await client.callTool({
+        name: "suggest_recipe",
+        arguments: { style: "American Pale Ale" },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const grainBill = extractGrainBillSection(text);
+      const grainLines = grainBill.split("\n").filter((l) => l.startsWith("- "));
+      expect(grainLines).toHaveLength(1);
+      expect(grainLines[0]).toMatch(/\(base\)/);
+    });
+  });
 });
