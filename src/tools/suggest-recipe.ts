@@ -162,7 +162,11 @@ export function registerSuggestRecipe(server: McpServer): void {
       const isDry = tags.includes("bitter") || tags.includes("hoppy") || matchedStyle.name.toLowerCase().includes("ipa");
       const mashTemp = isDry ? "65°C (149°F) — lower for drier finish" : "67°C (153°F) — higher for fuller body";
 
-      const fermTemp = `${yeast.tempMin}-${yeast.tempMax}°F (${Math.round((yeast.tempMin - 32) * 5 / 9)}-${Math.round((yeast.tempMax - 32) * 5 / 9)}°C)`;
+      // Yeast tempMin/tempMax are stored in °C (see src/data/yeasts.ts —
+      // ales 18–23, lagers 9–15, kveik 25–40). Convert °C → °F for display.
+      const fermTempFMin = Math.round(yeast.tempMin * 9 / 5 + 32);
+      const fermTempFMax = Math.round(yeast.tempMax * 9 / 5 + 32);
+      const fermTemp = `${yeast.tempMin}-${yeast.tempMax}°C (${fermTempFMin}-${fermTempFMax}°F)`;
 
       const lines: string[] = [
         `# Recipe: ${matchedStyle.name}`,

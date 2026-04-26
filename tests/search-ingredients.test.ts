@@ -72,4 +72,17 @@ describe("search_ingredients tool", () => {
     expect(text).toContain("No ingredients found");
     expect(text).toContain("zzzzxyzzy");
   });
+
+  // Regression: yeast tempMin/tempMax data is in °C; the formatter previously
+  // labelled it °F, which is incoherent (US-05 at 18-23°F would be near-frozen).
+  it("formats yeast fermentation temperature in Celsius", async () => {
+    const result = await client.callTool({
+      name: "search_ingredients",
+      arguments: { query: "US-05", category: "yeasts" },
+    });
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain("US-05");
+    expect(text).toMatch(/Temp:\s*\d+-\d+°C/);
+    expect(text).not.toMatch(/Temp:\s*\d+-\d+°F/);
+  });
 });
