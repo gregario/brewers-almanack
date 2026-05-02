@@ -1,10 +1,10 @@
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "tools_count": 6,
-  "npm": { "published": true, "version": "0.1.1" },
+  "npm": { "published": true, "version": "0.1.2" },
   "glama": { "listed": true, "score_badge": true, "ownership_claimed": true },
   "mcp_registry": { "registered": true, "mcp_name": "io.github.gregario/brewers-almanack" },
   "awesome_mcp_servers": { "pr_submitted": true, "pr_url": "https://github.com/punkpeye/awesome-mcp-servers/pull/3226" },
-  "github": { "sponsor_enabled": false },
+  "github": { "release_tag": "v0.1.2", "sponsor_enabled": false },
   "ci": { "oidc_publishing": false }
 }
