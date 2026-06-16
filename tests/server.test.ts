@@ -17,9 +17,9 @@ describe("brewers-almanack server", () => {
     ]);
   });
 
-  it("lists 6 tools", async () => {
+  it("lists 7 tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(6);
+    expect(tools).toHaveLength(7);
   });
 
   it("has search_styles tool", async () => {
