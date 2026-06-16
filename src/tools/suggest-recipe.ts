@@ -8,6 +8,42 @@ import { WATER_PROFILES } from "../data/water-profiles.js";
 import { fuzzySearch } from "../lib/search.js";
 
 function findStyle(query: string) {
+  // First check sub-style names (exact match)
+  for (const style of STYLES) {
+    if (style.subStyles) {
+      for (const sub of style.subStyles) {
+        if (sub.name.toLowerCase() === query.toLowerCase()) {
+          return {
+            ...style,
+            name: sub.name,
+            overallImpression: sub.overallImpression,
+            vitalStats: sub.vitalStats,
+            ingredients: sub.ingredients,
+            tags: sub.tags,
+          };
+        }
+      }
+    }
+  }
+  // Then fuzzy match sub-style names
+  for (const style of STYLES) {
+    if (style.subStyles) {
+      for (const sub of style.subStyles) {
+        if (sub.name.toLowerCase().includes(query.toLowerCase()) ||
+            query.toLowerCase().includes(sub.name.toLowerCase())) {
+          return {
+            ...style,
+            name: sub.name,
+            overallImpression: sub.overallImpression,
+            vitalStats: sub.vitalStats,
+            ingredients: sub.ingredients,
+            tags: sub.tags,
+          };
+        }
+      }
+    }
+  }
+  // Fall back to standard style search
   const results = fuzzySearch(STYLES, query, ["name", "category"]);
   return results.length > 0 ? results[0] : null;
 }
@@ -56,6 +92,15 @@ function selectMalts(styleName: string, category: string, tags: string[]) {
   // Pick specialty malts based on style character. Use tag/word checks,
   // not bare substring matches, to avoid picking up "red" inside "lagered".
   const specialtyMalts = MALTS.filter((m) => m.type !== "base");
+
+  // Rye styles: add rye malt as specialty grain
+  const isRye = hasWord(nameCat, "rye");
+  if (isRye) {
+    const ryeMalt = specialtyMalts.find((m) => m.name.toLowerCase().includes("rye"));
+    if (ryeMalt) {
+      return { base, specialty: [ryeMalt] };
+    }
+  }
 
   const isDark =
     tagsLower.includes("dark-color") ||

@@ -1,3 +1,17 @@
+export type SubStyle = {
+  name: string;
+  overallImpression: string;
+  vitalStats: {
+    ogMin: number; ogMax: number;
+    fgMin: number; fgMax: number;
+    ibuMin: number; ibuMax: number;
+    srmMin: number; srmMax: number;
+    abvMin: number; abvMax: number;
+  };
+  ingredients: string;
+  tags: string[];
+};
+
 export type BeerStyle = {
   id: string;
   name: string;
@@ -15,6 +29,7 @@ export type BeerStyle = {
   ingredients: string;
   examples: string;
   tags: string[];
+  subStyles?: SubStyle[];
 };
 
 export type Hop = {
