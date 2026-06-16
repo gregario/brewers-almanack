@@ -82,12 +82,14 @@ async function main() {
   console.log(`  [1/${CATEGORIES.length}] ${CATEGORIES[0].name}...`);
   try {
     const result = await firecrawl.scrapeUrl(KIT_BUILDER_URL, {
-      formats: ["json"],
-      jsonOptions: {
-        prompt:
-          "Extract all products from this page. Each product has a name, a price (shown as price per gram in GBP like £0.0036), and a stock status (in_stock if no stock label, low_stock if marked [low stock], out_of_stock if marked [out of stock]).",
-        schema: PRODUCT_SCHEMA,
-      },
+      formats: [
+        {
+          type: "json",
+          prompt:
+            "Extract all products from this page. Each product has a name, a price (shown as price per gram in GBP like £0.0036), and a stock status (in_stock if no stock label, low_stock if marked [low stock], out_of_stock if marked [out of stock]).",
+          schema: PRODUCT_SCHEMA,
+        },
+      ],
       waitFor: 5000,
     });
 
@@ -121,11 +123,13 @@ async function main() {
       // Click the step link (wizard steps are numbered list items)
       // The step links are in an <ol> — we click the nth <li> <a>
       const result = await firecrawl.scrapeUrl(KIT_BUILDER_URL, {
-        formats: ["json"],
-        jsonOptions: {
-          prompt: `Extract all products visible in the "${cat.name}" section/step of this kit builder. Each product has a name, a price per gram in GBP (like £0.0036), and a stock status (in_stock if no label, low_stock if [low stock], out_of_stock if [out of stock]).`,
-          schema: PRODUCT_SCHEMA,
-        },
+        formats: [
+          {
+            type: "json",
+            prompt: `Extract all products visible in the "${cat.name}" section/step of this kit builder. Each product has a name, a price per gram in GBP (like £0.0036), and a stock status (in_stock if no label, low_stock if [low stock], out_of_stock if [out of stock]).`,
+            schema: PRODUCT_SCHEMA,
+          },
+        ],
         actions: [
           { type: "wait", milliseconds: 2000 },
           {
