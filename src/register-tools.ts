@@ -8,6 +8,7 @@ import { registerPairingGuide } from "./tools/pairing-guide.js";
 import { registerCalculateIbu } from "./tools/calculate-ibu.js";
 import { registerReviewRecipe } from "./tools/review-recipe.js";
 import { registerSuggestSubstitution } from "./tools/suggest-substitution.js";
+import { registerCalculateWaterAdditions } from "./tools/calculate-water-additions.js";
 
 export function registerTools(server: McpServer): void {
   registerSearchStyles(server);
@@ -19,4 +20,5 @@ export function registerTools(server: McpServer): void {
   registerCalculateIbu(server);
   registerReviewRecipe(server);
   registerSuggestSubstitution(server);
+  registerCalculateWaterAdditions(server);
 }
