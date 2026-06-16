@@ -9,6 +9,7 @@ import { registerCalculateIbu } from "./tools/calculate-ibu.js";
 import { registerReviewRecipe } from "./tools/review-recipe.js";
 import { registerSuggestSubstitution } from "./tools/suggest-substitution.js";
 import { registerCalculateWaterAdditions } from "./tools/calculate-water-additions.js";
+import { registerCheckGebStock } from "./tools/check-geb-stock.js";
 
 export function registerTools(server: McpServer): void {
   registerSearchStyles(server);
@@ -21,4 +22,5 @@ export function registerTools(server: McpServer): void {
   registerReviewRecipe(server);
   registerSuggestSubstitution(server);
   registerCalculateWaterAdditions(server);
+  registerCheckGebStock(server);
 }

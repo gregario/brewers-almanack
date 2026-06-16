@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "fetch-geb": "tsx scripts/fetch-geb.ts",
     "prepublishOnly": "npm run build && npm test"
   },
   "engines": {
@@ -52,6 +53,7 @@
     "zod": "^3.25"
   },
   "devDependencies": {
+    "@mendable/firecrawl-js": "^4.26.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
