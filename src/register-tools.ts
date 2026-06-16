@@ -6,6 +6,7 @@ import { registerMatchWaterProfile } from "./tools/match-water-profile.js";
 import { registerSuggestRecipe } from "./tools/suggest-recipe.js";
 import { registerPairingGuide } from "./tools/pairing-guide.js";
 import { registerCalculateIbu } from "./tools/calculate-ibu.js";
+import { registerReviewRecipe } from "./tools/review-recipe.js";
 
 export function registerTools(server: McpServer): void {
   registerSearchStyles(server);
@@ -15,4 +16,5 @@ export function registerTools(server: McpServer): void {
   registerSuggestRecipe(server);
   registerPairingGuide(server);
   registerCalculateIbu(server);
+  registerReviewRecipe(server);
 }
