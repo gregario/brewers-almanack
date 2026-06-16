@@ -1,30 +1,48 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { GEB_INVENTORY, GEB_LAST_UPDATED } from "../data/geb-inventory.js";
+import type { GebProduct } from "../data/geb-inventory.js";
 import { HOPS } from "../data/hops.js";
 import { MALTS } from "../data/malts.js";
 import { YEASTS } from "../data/yeasts.js";
 
-function searchInventory(query: string, category?: string) {
+function searchInventory(query: string, category?: string): GebProduct[] {
   let items = GEB_INVENTORY;
   if (category) {
     items = items.filter((p) =>
       p.category.toLowerCase().includes(category.toLowerCase()),
     );
   }
-  // Fuzzy match against product name
   const queryLower = query.toLowerCase();
   return items.filter((p) => p.name.toLowerCase().includes(queryLower));
 }
 
+function formatPrice(product: GebProduct): string {
+  if (product.unit === "per_gram") {
+    // Show as £/kg for readability (price is stored per gram)
+    return `£${(product.price_per_gram_gbp * 1000).toFixed(2)}/kg`;
+  }
+  return `£${product.price_per_gram_gbp.toFixed(2)} each`;
+}
+
+function formatStock(status: GebProduct["stock_status"]): string {
+  switch (status) {
+    case "in_stock": return "✓ In Stock";
+    case "low_stock": return "⚠ Low Stock";
+    case "out_of_stock": return "✗ Out of Stock";
+  }
+}
+
+function isAvailable(product: GebProduct): boolean {
+  return product.stock_status !== "out_of_stock";
+}
+
 function findSubstitutes(query: string): string[] {
-  // Check hops
   const hop = HOPS.find((h) =>
     h.name.toLowerCase().includes(query.toLowerCase()),
   );
   if (hop) return hop.substitutes;
 
-  // Check malts — find similar type/colour
   const malt = MALTS.find((m) =>
     m.name.toLowerCase().includes(query.toLowerCase()),
   );
@@ -42,7 +60,6 @@ function findSubstitutes(query: string): string[] {
       .map((m) => m.name);
   }
 
-  // Check yeasts
   const yeast = YEASTS.find(
     (y) =>
       y.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -74,7 +91,7 @@ export function registerCheckGebStock(server: McpServer): void {
           .string()
           .optional()
           .describe(
-            "Filter by category (e.g. 'Hops', 'Base Malt', 'Yeast')",
+            "Filter by category (e.g. 'T90 Hops', 'Base Malt', 'Dried Yeast')",
           ),
       },
     },
@@ -99,16 +116,15 @@ export function registerCheckGebStock(server: McpServer): void {
       if (matches.length === 0) {
         lines.push(`No products found matching "${query}".`);
 
-        // Suggest substitutes from brewing knowledge
         const subs = findSubstitutes(query);
         if (subs.length > 0) {
           lines.push("", "## Try Instead");
           for (const sub of subs) {
             const subMatches = searchInventory(sub);
-            const inStock = subMatches.filter((m) => m.in_stock);
-            if (inStock.length > 0) {
+            const available = subMatches.filter(isAvailable);
+            if (available.length > 0) {
               lines.push(
-                `- **${sub}** — £${inStock[0].price_gbp.toFixed(2)} (${inStock[0].unit}) - In Stock`,
+                `- **${sub}** — ${formatPrice(available[0])} ${formatStock(available[0].stock_status)}`,
               );
             } else if (subMatches.length > 0) {
               lines.push(`- **${sub}** — listed but out of stock`);
@@ -118,14 +134,14 @@ export function registerCheckGebStock(server: McpServer): void {
           }
         }
       } else {
-        const inStock = matches.filter((m) => m.in_stock);
-        const outOfStock = matches.filter((m) => !m.in_stock);
+        const available = matches.filter(isAvailable);
+        const outOfStock = matches.filter((m) => !isAvailable(m));
 
-        if (inStock.length > 0) {
+        if (available.length > 0) {
           lines.push("## Available");
-          for (const p of inStock) {
+          for (const p of available) {
             lines.push(
-              `- ${p.name} — £${p.price_gbp.toFixed(2)} (${p.unit}) - In Stock`,
+              `- ${p.name} — ${formatPrice(p)} ${formatStock(p.stock_status)}`,
             );
           }
         }
@@ -133,22 +149,19 @@ export function registerCheckGebStock(server: McpServer): void {
         if (outOfStock.length > 0) {
           lines.push("", "## Out of Stock");
           for (const p of outOfStock) {
-            lines.push(
-              `- ${p.name} — £${p.price_gbp.toFixed(2)} (${p.unit}) - Out of Stock`,
-            );
+            lines.push(`- ${p.name} — ${formatPrice(p)}`);
           }
 
-          // If everything matching is out of stock, suggest substitutes
-          if (inStock.length === 0) {
+          if (available.length === 0) {
             const subs = findSubstitutes(query);
             if (subs.length > 0) {
               lines.push("", "## Substitutes Available at GEB");
               for (const sub of subs) {
                 const subMatches = searchInventory(sub);
-                const subInStock = subMatches.filter((m) => m.in_stock);
-                if (subInStock.length > 0) {
+                const subAvailable = subMatches.filter(isAvailable);
+                if (subAvailable.length > 0) {
                   lines.push(
-                    `- **${sub}** — £${subInStock[0].price_gbp.toFixed(2)} (${subInStock[0].unit})`,
+                    `- **${sub}** — ${formatPrice(subAvailable[0])} ${formatStock(subAvailable[0].stock_status)}`,
                   );
                 }
               }
