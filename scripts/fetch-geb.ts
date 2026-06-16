@@ -147,8 +147,18 @@ async function main() {
 
   console.log(`\nTotal products found: ${allProducts.length}`);
 
-  // Even if we get 0 products (scraping issues), write the file so the build doesn't break.
-  // The workflow will detect no data change via git diff.
+  // Guard: refuse to overwrite with empty or suspiciously small data.
+  // If scraping returned nothing or way fewer products than expected,
+  // GEB likely changed their HTML or Firecrawl had issues — don't ship
+  // broken inventory to npm. Exit 0 so the workflow doesn't fail, but
+  // the git-diff check will see no file change and skip the publish.
+  const MIN_EXPECTED_PRODUCTS = 10;
+  if (allProducts.length < MIN_EXPECTED_PRODUCTS) {
+    console.log(
+      `Only ${allProducts.length} products scraped (minimum: ${MIN_EXPECTED_PRODUCTS}) — keeping existing inventory unchanged.`,
+    );
+    process.exit(0);
+  }
 
   // Write src/data/geb-inventory.ts
   const outputPath = join(ROOT, "src", "data", "geb-inventory.ts");
