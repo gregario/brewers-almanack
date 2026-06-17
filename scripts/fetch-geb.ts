@@ -4,9 +4,10 @@
  * Usage: npx tsx scripts/fetch-geb.ts
  * Requires FIRECRAWL_API_KEY environment variable.
  *
- * The GEB kit builder is a wizard at /custom-grain-kit/ with 10 product categories.
- * Each category is a step in the wizard. We use Firecrawl's JSON extraction
- * to pull structured product data from each step.
+ * Strategy: The kit builder wizard at /custom-grain-kit/ renders each category
+ * server-side when accessed via the `step=` URL parameter. We scrape each
+ * category's URL as markdown (1 credit each) and parse the product listings.
+ * No click actions or JSON extraction needed.
  */
 
 import FirecrawlApp from "@mendable/firecrawl-js";
@@ -18,7 +19,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = join(__dirname, "..");
 
-const KIT_BUILDER_URL = "https://www.geterbrewed.com/custom-grain-kit/";
+const BASE_URL =
+  "https://www.geterbrewed.com/index.php?route=custom_kit/type&custom_kit_type_id=1";
 
 interface GebProduct {
   name: string;
@@ -28,43 +30,94 @@ interface GebProduct {
   stock_status: "in_stock" | "low_stock" | "out_of_stock";
 }
 
-// The kit builder has 10 product steps (steps 11-13 are Verify/Submit/Options — no products).
-// Each step has a CSS selector for the step link. The page renders step 1 by default;
-// steps 2-10 need a click to reveal their products.
+// data-step values from the wizard tabs (NOT sequential 1-10)
 const CATEGORIES = [
-  { name: "Base Malt", step: 1, unit: "per_gram" as const },
-  { name: "Lightly Kilned Malt", step: 2, unit: "per_gram" as const },
-  { name: "Caramel & Crystal Malt", step: 3, unit: "per_gram" as const },
-  { name: "Flaked & Unmalted Adjuncts", step: 4, unit: "per_gram" as const },
-  { name: "Smoked Malts", step: 5, unit: "per_gram" as const },
-  { name: "T90 Hops", step: 6, unit: "per_gram" as const },
-  { name: "Dried Yeast", step: 7, unit: "per_unit" as const },
-  { name: "Liquid Yeast", step: 8, unit: "per_unit" as const },
-  { name: "Flavours", step: 9, unit: "per_unit" as const },
-  { name: "Sugars", step: 10, unit: "per_gram" as const },
+  { name: "Base Malt", stepId: "27", unit: "per_gram" as const },
+  { name: "Lightly Kilned Malt", stepId: "30", unit: "per_gram" as const },
+  { name: "Caramel & Crystal Malt", stepId: "28", unit: "per_gram" as const },
+  { name: "Flaked & Unmalted Adjuncts", stepId: "29", unit: "per_gram" as const },
+  { name: "Smoked Malts", stepId: "32", unit: "per_gram" as const },
+  { name: "T90 Hops", stepId: "123", unit: "per_gram" as const },
+  { name: "Dried Yeast", stepId: "159", unit: "per_unit" as const },
+  { name: "Liquid Yeast", stepId: "112", unit: "per_unit" as const },
+  { name: "Flavours", stepId: "15", unit: "per_unit" as const },
+  { name: "Sugars", stepId: "26", unit: "per_gram" as const },
 ];
 
-const PRODUCT_SCHEMA = {
-  type: "object" as const,
-  properties: {
-    products: {
-      type: "array" as const,
-      items: {
-        type: "object" as const,
-        properties: {
-          name: { type: "string" as const },
-          price_per_gram_gbp: { type: "number" as const },
-          stock_status: {
-            type: "string" as const,
-            enum: ["in_stock", "low_stock", "out_of_stock"],
-          },
-        },
-        required: ["name", "price_per_gram_gbp", "stock_status"],
-      },
-    },
-  },
-  required: ["products"],
-};
+function parseProducts(markdown: string, category: string, unit: GebProduct["unit"]): GebProduct[] {
+  const products: GebProduct[] = [];
+
+  // Products appear as lines like:
+  //   Citra T90 Hop Pellets (USA) (2025) AA: 13.9%
+  //   \[ £0.0792\]
+  //
+  // Or with stock status:
+  //   Cascade T90 Hop Pellets (USA) (2025) AA: 6.1%
+  //   \[ £0.0599\]  \[low stock\]
+  //
+  // Or disabled (out of stock):
+  //   Admiral T90 Hop Pellets (UK) (2025) AA: 14.58%
+  //   \[ £0.0531\]  \[out of stock\]
+  //
+  // Some per-unit items show as:
+  //   Fermentis SafAle US-05
+  //   \[ £3.50\]
+
+  // Match product name + price line patterns
+  const lines = markdown.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Look for price pattern: \[ £X.XXXX\] with optional stock status
+    const priceMatch = line.match(
+      /\\?\[?\s*£(\d+\.?\d*)\s*\\?\]?\s*(?:\\?\[?(low stock|out of stock)\\?\]?)?/i
+    );
+
+    if (priceMatch) {
+      // The product name is on the previous non-empty line
+      let nameLineIdx = i - 1;
+      while (nameLineIdx >= 0 && !lines[nameLineIdx].trim()) {
+        nameLineIdx--;
+      }
+
+      if (nameLineIdx < 0) continue;
+
+      const name = lines[nameLineIdx]
+        .trim()
+        .replace(/^\*\*/, "")
+        .replace(/\*\*$/, "")
+        .replace(/^[-*]\s*/, "");
+
+      // Skip navigation/header lines
+      if (!name || name.startsWith("#") || name === "Kg" || name === "Gr" ||
+          name.startsWith("Search") || name.startsWith("Please select") ||
+          name.startsWith("[") || name.length < 3) {
+        continue;
+      }
+
+      const price = parseFloat(priceMatch[1]);
+      const stockLabel = priceMatch[2]?.toLowerCase();
+
+      let stock_status: GebProduct["stock_status"] = "in_stock";
+      if (stockLabel === "out of stock") {
+        stock_status = "out_of_stock";
+      } else if (stockLabel === "low stock") {
+        stock_status = "low_stock";
+      }
+
+      products.push({
+        name,
+        price_per_gram_gbp: price,
+        unit,
+        category,
+        stock_status,
+      });
+    }
+  }
+
+  return products;
+}
 
 async function main() {
   const apiKey = process.env.FIRECRAWL_API_KEY;
@@ -78,87 +131,23 @@ async function main() {
 
   console.log("Scraping GEB kit builder...\n");
 
-  // Step 1 (Base Malt) is visible on initial page load — no click needed
-  console.log(`  [1/${CATEGORIES.length}] ${CATEGORIES[0].name}...`);
-  try {
-    const result = await firecrawl.scrapeUrl(KIT_BUILDER_URL, {
-      formats: [
-        {
-          type: "json",
-          prompt:
-            "Extract all products from this page. Each product has a name, a price (shown as price per gram in GBP like £0.0036), and a stock status (in_stock if no stock label, low_stock if marked [low stock], out_of_stock if marked [out of stock]).",
-          schema: PRODUCT_SCHEMA,
-        },
-      ],
-      waitFor: 5000,
-    });
-
-    if (result.json?.products) {
-      const products = result.json.products as Array<{
-        name: string;
-        price_per_gram_gbp: number;
-        stock_status: string;
-      }>;
-      for (const p of products) {
-        allProducts.push({
-          name: p.name,
-          price_per_gram_gbp: p.price_per_gram_gbp,
-          unit: CATEGORIES[0].unit,
-          category: CATEGORIES[0].name,
-          stock_status: p.stock_status as GebProduct["stock_status"],
-        });
-      }
-      console.log(`    → ${products.length} products`);
-    }
-  } catch (e) {
-    console.warn(`    ✗ Failed: ${e}`);
-  }
-
-  // Steps 2-10: click the step tab to reveal products, then extract
-  for (let i = 1; i < CATEGORIES.length; i++) {
+  for (let i = 0; i < CATEGORIES.length; i++) {
     const cat = CATEGORIES[i];
+    const url = `${BASE_URL}&step=${cat.stepId}`;
     console.log(`  [${i + 1}/${CATEGORIES.length}] ${cat.name}...`);
 
     try {
-      // Click the step link (wizard steps are numbered list items)
-      // The step links are in an <ol> — we click the nth <li> <a>
-      const result = await firecrawl.scrapeUrl(KIT_BUILDER_URL, {
-        formats: [
-          {
-            type: "json",
-            prompt: `Extract all products visible in the "${cat.name}" section/step of this kit builder. Each product has a name, a price per gram in GBP (like £0.0036), and a stock status (in_stock if no label, low_stock if [low stock], out_of_stock if [out of stock]).`,
-            schema: PRODUCT_SCHEMA,
-          },
-        ],
-        actions: [
-          { type: "wait", milliseconds: 2000 },
-          {
-            type: "click",
-            selector: `.custom-kit-steps li:nth-child(${cat.step}) a, ol li:nth-child(${cat.step}) a`,
-          },
-          { type: "wait", milliseconds: 3000 },
-        ],
+      const result = await firecrawl.scrapeUrl(url, {
+        formats: ["markdown"],
         waitFor: 3000,
       });
 
-      if (result.json?.products) {
-        const products = result.json.products as Array<{
-          name: string;
-          price_per_gram_gbp: number;
-          stock_status: string;
-        }>;
-        for (const p of products) {
-          allProducts.push({
-            name: p.name,
-            price_per_gram_gbp: p.price_per_gram_gbp,
-            unit: cat.unit,
-            category: cat.name,
-            stock_status: p.stock_status as GebProduct["stock_status"],
-          });
-        }
+      if (result.markdown) {
+        const products = parseProducts(result.markdown, cat.name, cat.unit);
+        allProducts.push(...products);
         console.log(`    → ${products.length} products`);
       } else {
-        console.warn(`    → 0 products (no JSON returned)`);
+        console.warn(`    → 0 products (no markdown returned)`);
       }
     } catch (e) {
       console.warn(`    ✗ Failed: ${e}`);
