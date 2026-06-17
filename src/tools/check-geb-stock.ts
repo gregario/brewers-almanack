@@ -5,17 +5,7 @@ import type { GebProduct } from "../data/geb-inventory.js";
 import { HOPS } from "../data/hops.js";
 import { MALTS } from "../data/malts.js";
 import { YEASTS } from "../data/yeasts.js";
-
-function searchInventory(query: string, category?: string): GebProduct[] {
-  let items = GEB_INVENTORY;
-  if (category) {
-    items = items.filter((p) =>
-      p.category.toLowerCase().includes(category.toLowerCase()),
-    );
-  }
-  const queryLower = query.toLowerCase();
-  return items.filter((p) => p.name.toLowerCase().includes(queryLower));
-}
+import { fuzzySearchInventory } from "../lib/fuzzy-search.js";
 
 function formatPrice(product: GebProduct): string {
   if (product.unit === "per_gram") {
@@ -96,7 +86,7 @@ export function registerCheckGebStock(server: McpServer): void {
       },
     },
     async ({ query, category }) => {
-      const matches = searchInventory(query, category);
+      const matches = fuzzySearchInventory(query, category);
 
       const lines: string[] = [
         `# GEB Stock: ${query}`,
@@ -120,7 +110,7 @@ export function registerCheckGebStock(server: McpServer): void {
         if (subs.length > 0) {
           lines.push("", "## Try Instead");
           for (const sub of subs) {
-            const subMatches = searchInventory(sub);
+            const subMatches = fuzzySearchInventory(sub);
             const available = subMatches.filter(isAvailable);
             if (available.length > 0) {
               lines.push(
@@ -157,7 +147,7 @@ export function registerCheckGebStock(server: McpServer): void {
             if (subs.length > 0) {
               lines.push("", "## Substitutes Available at GEB");
               for (const sub of subs) {
-                const subMatches = searchInventory(sub);
+                const subMatches = fuzzySearchInventory(sub);
                 const subAvailable = subMatches.filter(isAvailable);
                 if (subAvailable.length > 0) {
                   lines.push(
